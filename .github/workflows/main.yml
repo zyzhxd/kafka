@@ -1,0 +1,54 @@
+name: Build Apache Kafka (Scala 2.13)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Kafka branch to build"
+        required: true
+        default: "trunk"
+      scala_version:
+        description: "Scala version"
+        required: true
+        default: "2.13"
+      skip_tests:
+        description: "Skip tests? (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Kafka
+        uses: actions/checkout@v4
+        with:
+          repository: apache/kafka
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Build Kafka
+        run: |
+          GRADLE_OPTS=""
+          if [ "${{ github.event.inputs.skip_tests }}" = "true" ]; then
+            GRADLE_OPTS="$GRADLE_OPTS -x test"
+          fi
+          ./gradlew clean releaseTarGz -PscalaVersion=${{ github.event.inputs.scala_version }} $GRADLE_OPTS
+
+      - name: Find artifact
+        id: find_artifact
+        run: |
+          FILE=$(find ./core/build/distributions -name "*.tgz" | head -n 1)
+          echo "artifact=$FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload Kafka artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kafka-${{ github.event.inputs.scala_version }}
+          path: ${{ steps.find_artifact.outputs.artifact }}
